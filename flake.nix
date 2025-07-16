@@ -21,23 +21,28 @@
       ];
 
       forAllSystems = function: lib.genAttrs systems (system: function nixpkgs.legacyPackages.${system});
-    in
-    {
-      nixosModules.wsl = {
-        imports = [
-          ./modules
 
-          (_: {
-            wsl.version.rev = lib.mkIf (self ? rev) self.rev;
-          })
-        ];
+      np = import nixpkgs;
+
+      mkSystem = {system, buildPlatform ? null}: mkSystemF {
+        inherit system;
+        pkgs = if buildPlatform == null then
+          np {localSystem.system = system;}
+        else np {
+          crossSystem.system = system;
+          localSystem.system = buildPlatform;
+          config.warnUndeclaredOptions = true;
+          # allow NixOS system config cross compilation
+          config.allowUnsupportedSystem = true;
+        };
       };
-      nixosModules.default = self.nixosModules.wsl;
 
-      nixosConfigurations = {
-        default = lib.nixosSystem {
-          system = "x86_64-linux";
+      mkSystemF = {system, pkgs}: lib.nixosSystem {
+          inherit system;
           modules = [
+            {
+              nixpkgs.pkgs = pkgs;
+            }
             self.nixosModules.default
             ({ config, lib, pkgs, ... }: {
               # This config is only used until the first nixos-rebuild. For the config installed to /etc/nixos/configuration.nix, see modules/build-tarball.nix
@@ -66,11 +71,32 @@
               system.stateVersion = config.system.nixos.release;
             })
           ];
-        };
+        };    in
+    {
+      nixosModules.wsl = {
+        imports = [
+          ./modules
+
+          (_: {
+            wsl.version.rev = lib.mkIf (self ? rev) self.rev;
+          })
+        ];
+      };
+      nixosModules.default = self.nixosModules.wsl;
+
+      nixosConfigurations = {
+        default = mkSystem {system = "x86_64-linux";};
 
         modern = lib.warn "nixosConfigurations.modern has been renamed to nixosConfigurations.default" self.nixosConfigurations.default;
 
         legacy = throw "nixosConfigurations.legacy has been removed as syschdemd has been removed";
+      };
+
+      nixosConfigurationsForBuildSystem = {
+        x86_64-to-aarch64 = mkSystem {
+          system = "aarch64-linux";
+          buildPlatform = "x86_64-linux";
+        };
       };
 
       checks = forAllSystems (
