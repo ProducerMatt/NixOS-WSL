@@ -24,9 +24,8 @@
 
       np = import nixpkgs;
 
-      mkSystem = {system, buildPlatform ? null}: mkSystemF {
-        inherit system;
-        pkgs = if buildPlatform == null then
+      mkPkgs = {system, buildPlatform ? null}@platformArgs:
+       if buildPlatform == null then
           np {localSystem.system = system;}
         else np {
           crossSystem.system = system;
@@ -35,10 +34,16 @@
           # allow NixOS system config cross compilation
           config.allowUnsupportedSystem = true;
         };
+
+      mkSystem = {system, buildPlatform ? null}@platformArgs: mkSystemF rec {
+        inherit system;
+        pkgs = mkPkgs platformArgs;
+        buildPkgs = if buildPlatform == null then pkgs else mkPkgs {system = buildPlatform;};
       };
 
-      mkSystemF = {system, pkgs}: lib.nixosSystem {
+      mkSystemF = {system, pkgs, buildPkgs}: lib.nixosSystem {
           inherit system;
+          specialArgs = {inherit buildPkgs;};
           modules = [
             {
               nixpkgs.pkgs = pkgs;
@@ -71,7 +76,8 @@
               system.stateVersion = config.system.nixos.release;
             })
           ];
-        };    in
+        };
+    in
     {
       nixosModules.wsl = {
         imports = [
