@@ -1,4 +1,4 @@
-{ config, pkgs, buildPkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
 with builtins; with lib;
 let
   cfg = config.wsl.tarball;
@@ -64,17 +64,17 @@ in
 
   # These options make no sense without the wsl-distro module anyway
   config = mkIf config.wsl.enable {
-    system.build.tarballBuilder = buildPkgs.writeShellApplication {
+    system.build.tarballBuilderFun = {pkgs, lib}: pkgs.writeShellApplication {
       name = "nixos-wsl-tarball-builder";
 
       runtimeInputs = [
-        buildPkgs.coreutils
-        buildPkgs.e2fsprogs
-        buildPkgs.gnutar
-        buildPkgs.nixos-install-tools
-        buildPkgs.pigz
+        pkgs.coreutils
+        pkgs.e2fsprogs
+        pkgs.gnutar
+        pkgs.nixos-install-tools
+        pkgs.pigz
         # FIXME: should be config.nix.package, but that could be the wrong system
-        buildPkgs.nix
+        pkgs.nix
       ];
 
       text = ''

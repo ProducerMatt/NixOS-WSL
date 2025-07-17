@@ -35,15 +35,13 @@
           config.allowUnsupportedSystem = true;
         };
 
-      mkSystem = {system, buildPlatform ? null}@platformArgs: mkSystemF rec {
+      mkSystem = {system, buildPlatform ? null}@platformArgs: mkSystemF {
         inherit system;
         pkgs = mkPkgs platformArgs;
-        buildPkgs = if buildPlatform == null then pkgs else mkPkgs {system = buildPlatform;};
       };
 
-      mkSystemF = {system, pkgs, buildPkgs}: lib.nixosSystem {
+      mkSystemF = {system, pkgs}: lib.nixosSystem {
           inherit system;
-          specialArgs = {inherit buildPkgs;};
           modules = [
             {
               nixpkgs.pkgs = pkgs;
@@ -90,19 +88,38 @@
       };
       nixosModules.default = self.nixosModules.wsl;
 
-      nixosConfigurations = {
-        default = mkSystem {system = "x86_64-linux";};
+      nixosConfigurations = (lib.genAttrs systems (system: mkSystem {inherit system;})) // {
+        default = self.nixosConfigurations.x86_64-linux;
 
         modern = lib.warn "nixosConfigurations.modern has been renamed to nixosConfigurations.default" self.nixosConfigurations.default;
 
         legacy = throw "nixosConfigurations.legacy has been removed as syschdemd has been removed";
       };
 
-      nixosConfigurationsForBuildSystem = {
-        x86_64-to-aarch64 = mkSystem {
-          system = "aarch64-linux";
-          buildPlatform = "x86_64-linux";
+      nixosConfigurationsForBuildSystem = let
+        f = s1: {
+          name = s1;
+          value = lib.listToAttrs (map (s2: {
+            name = s2;
+            value = mkSystem {
+              system = s1;
+              buildPlatform = s2;
+            };
+          }) (lib.remove s1 systems));
         };
+       in lib.listToAttrs (map f systems);
+
+      tarballBuilders = {
+        nativeSystems = builtins.mapAttrs (_name: madesys:
+          madesys.config.system.build.tarballBuilderFun {inherit (madesys) pkgs lib;}
+        ) self.nixosConfigurations;
+        crossSystems = builtins.mapAttrs (to-sys-name: from-systems:
+          builtins.mapAttrs (from-sys-name: madesys: let
+              nativesys = self.nixosConfigurations.${from-sys-name};
+            in
+            madesys.config.system.build.tarballBuilderFun {inherit (nativesys) pkgs lib;}
+          ) from-systems
+        ) self.nixosConfigurationsForBuildSystem;
       };
 
       checks = forAllSystems (
