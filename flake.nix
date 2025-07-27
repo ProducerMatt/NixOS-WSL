@@ -53,7 +53,7 @@
 
               programs.bash.loginShellInit = "nixos-wsl-welcome";
 
-              nixpkgs = (import ./pkg-options.nix system inputs) // {
+              nixpkgs = (import ./pkg-options.nix {inherit system inputs;}) // {
                 # When the config is built from a flake, the NIX_PATH entry of nixpkgs is set to its flake version.
                 # Per default the resulting systems aren't flake-enabled, so rebuilds would fail.
                 # Note: This does not affect the module being imported into your own flake.
